@@ -1,0 +1,201 @@
+name: tf-deployment
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+    - main
+    - staging
+    paths:
+    - terraform/mymodule/**
+    - .github/workflows/tf-deployment.yaml
+
+env:
+  MODULE_DIR: terraform/mymodule
+
+defaults:
+  run:
+    working-directory: terraform/mymodule
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Cancel previous runs
+      uses: styfle/cancel-workflow-action@298a75ef115e3282b9b63473e30b924a7a9438de
+      with:
+        access_token: ${{ secrets.GITHUB_TOKEN }}
+
+    - uses: actions/checkout@v2
+    - uses: hashicorp/setup-terraform@v1
+
+    - id: fmt
+      run: terraform fmt
+      continue-on-error: false
+
+    - id: init
+      run: terraform init
+
+    - id: validate
+      run: terraform validate -no-color
+
+    - id: plan
+      run: terraform plan -no-color -out=out.tfplan
+      continue-on-error: true
+
+    - name: Encrypt plan binary file
+      run: |
+        echo ${{ secrets.ARTIFACT_ENCRYPTION_PRIKEY }} > private.key
+        openssl enc -e -a -aes256 -pbkdf2 -k private.key -in out.tfplan -out out.tfplan.enc
+
+    - name: Upload encrypted plan as artifact
+      uses: actions/upload-artifact@v2
+      with:
+        name: planfile
+        path: "${{ env.MODULE_DIR }}/out.tfplan.enc"
+        retention-days: 3
+
+    - name: Check plan length
+      continue-on-error: true
+      run: |
+        if [[ $(echo '${{ steps.plan.outputs.stdout }}' | wc -c ) -gt 64500 ]]; then
+          echo "TRUNCATION_MESSAGE=\\n⚠️ Terraform plan was truncated! Check the TFE console to view the full plan.\\n" >> $GITHUB_ENV
+          exit 1
+        else
+          echo "TRUNCATION_MESSAGE=" >> $GITHUB_ENV
+          exit 0
+        fi
+
+    - name: Truncate plan for PR comment
+      uses: 2428392/gh-truncate-string-action@026a907e840b1a30e9732023d2e7f42c82f9312f
+      id: truncatedPlan
+      with:
+        stringToTruncate: "${{ steps.plan.outputs.stdout }}"
+        maxLength: 64500 # wc -c on commentBody below is 558 characters, max is 65536
+
+    - name: Post Terraform plan to PR
+      uses: actions/github-script@9ac08808f993958e9de277fe43a64532a609130e
+      if: github.event_name == 'pull_request'
+      env:
+        PLAN: "terraform\n${{ steps.truncatedPlan.outputs.string }}\n"
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        script: |
+          const commentBody = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
+          #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
+          #### Terraform Validation 🤖${{ steps.validate.outputs.stdout }}
+          #### Terraform Plan 📖\`${{ steps.plan.outcome }}\`
+          <details><summary>Show Plan</summary>
+
+          \`\`\`${process.env.PLAN}\`\`\`
+          </details>
+
+          ${{ env.TRUNCATION_MESSAGE }}
+          *Pusher: @${{ github.actor }}, Action: \`${{ github.event_name }}\`, Working Directory: \`${{ env.MODULE_DIR }}\`, Workflow: \`${{ github.workflow }}\`*`;
+
+          // Get the existing comments.
+          const {data: comments} = await github.rest.issues.listComments({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            issue_number: context.payload.number,
+          })
+
+          // Find any comment already made by the bot.
+          const botComment = comments.find(comment => comment.user.id === 41898282)
+
+          if (botComment) {
+            await github.rest.issues.updateComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              comment_id: botComment.id,
+              body: commentBody
+            })
+          } else {
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.payload.number,
+              body: commentBody
+            })
+          }
+
+  apply-staging:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.pull_request.base.ref == 'staging' ||
+      (
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/staging'
+      )
+    environment: staging
+    steps:
+    - uses: hashicorp/setup-terraform@v1
+
+    - name: Merge Pull Request
+      uses: juliangruber/merge-pull-request-action@e4d60b8afba3c7e3db40016e653071b14ac5313c
+      if: github.event_name == 'pull_request'
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        number: ${{ github.event.pull_request.number }}
+        method: rebase
+
+    - uses: actions/checkout@v2
+      with:
+        ref: staging
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: planfile
+        path: ${{ env.MODULE_DIR }}
+
+    - name: Decrypt plan artifact
+      run: |
+        echo ${{ secrets.ARTIFACT_ENCRYPTION_PRIKEY }} > private.key
+        openssl enc -d -a -aes256 -pbkdf2 -k private.key -in out.tfplan.enc -out out.tfplan
+
+    - name: Terrform apply
+      run: terraform init && terraform apply out.tfplan
+
+  apply-prod:
+    runs-on: ubuntu-latest
+    if: >
+      github.event.pull_request.base.ref == 'main' ||
+      (
+        github.event_name == 'workflow_dispatch' &&
+        github.ref == 'refs/heads/main'
+      )
+    environment: prod
+    steps:
+    - uses: hashicorp/setup-terraform@v1
+
+    - name: Merge Pull Request
+      uses: juliangruber/merge-pull-request-action@e4d60b8afba3c7e3db40016e653071b14ac5313c
+      if: github.event_name == 'pull_request'
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        number: ${{ github.event.pull_request.number }}
+        method: rebase
+
+    - uses: actions/checkout@v2
+      with:
+        ref: main
+
+    - uses: actions/download-artifact@v2
+      with:
+        name: planfile
+        path: ${{ env.MODULE_DIR }}
+
+    - name: Decrypt plan artifact
+      run: |
+        echo ${{ secrets.ARTIFACT_ENCRYPTION_PRIKEY }} > private.key
+        openssl enc -d -a -aes256 -pbkdf2 -k private.key -in out.tfplan.enc -out out.tfplan
+
+    - name: Terrform apply
+      run: terraform init && terraform apply out.tfplan
+
+    - name: Rebase staging on main
+      run: |
+        git fetch origin staging
+        git checkout staging
+        git rebase main
+        git push -f origin staging
