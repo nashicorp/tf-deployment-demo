@@ -18,7 +18,7 @@ resource "local_file" "quux" {
   filename = "${path.module}/quux.file"
 }
 
-resource "local_file" "z" {
-  content  = "z!"
-  filename = "${path.module}/z.file"
+resource "local_file" "a" {
+  content  = "a!"
+  filename = "${path.module}/a.file"
 }
