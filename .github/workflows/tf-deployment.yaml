@@ -194,8 +194,9 @@ jobs:
       run: terraform init && terraform apply out.tfplan
 
     - name: Rebase staging on main
+      if: github.event_name == 'pull_request'
       run: |
         git fetch origin staging
-        git checkout staging
+        git checkout staging && git merge
         git rebase main
         git push -f origin staging
