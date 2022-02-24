@@ -195,6 +195,7 @@ jobs:
 
     - name: Rebase staging on main
       if: github.event_name == 'pull_request'
+      working-directory: ${{ env.GITHUB_WORKSPACE }}
       run: |
         git fetch origin staging
         git checkout staging && git merge
