@@ -1,6 +1,8 @@
 # tf-deployment-demo
 
-## Setup
+https://user-images.githubusercontent.com/6537446/155623422-16072e72-38b3-439d-8085-e689aa66028b.mov
+
+## Repository Setup
 
 1. Generate an RSA key to use for encrypting the Terraform binary plan.
 
