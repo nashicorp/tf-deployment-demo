@@ -78,7 +78,7 @@ jobs:
       with:
         github-token: ${{ secrets.GITHUB_TOKEN }}
         script: |
-          let validationOutput = ${{ steps.validate.outputs.stdout }}
+          let validationOutput = "${{ steps.validate.outputs.stdout }}"
           let trimmedValidationOutput = validationOutput.trim()
           const commentBody = `#### Terraform Format and Style 🖌\`${{ steps.fmt.outcome }}\`
           #### Terraform Initialization ⚙️\`${{ steps.init.outcome }}\`
