@@ -14,7 +14,7 @@ resource "local_file" "baz" {
 }
 
 resource "local_file" "quux" {
-  content  = "quux!"
+  content  = "quux."
   filename = "${path.module}/quux.file"
 }
 
