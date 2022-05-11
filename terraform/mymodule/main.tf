@@ -9,7 +9,7 @@ resource "local_file" "bar" {
 }
 
 resource "local_file" "baz" {
-  content  = "baz!"
+  content  = "bar!"
   filename = "${path.module}/baz.file"
 }
 
