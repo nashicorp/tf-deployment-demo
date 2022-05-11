@@ -5,7 +5,7 @@ resource "local_file" "foo" {
 
 resource "local_file" "bar" {
   content  = "bar!"
-  filename = "${path.module}/bar.file"
+  filename = "${path.module}/bar.filez"
 }
 
 resource "local_file" "baz" {
