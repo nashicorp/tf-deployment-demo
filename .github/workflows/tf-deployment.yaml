@@ -195,6 +195,8 @@ jobs:
       if: github.event_name == 'pull_request'
       working-directory: ${{ env.GITHUB_WORKSPACE }}
       run: |
+        git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+        git config --global user.name "github-actions"
         git fetch origin staging
         git checkout staging && git merge
         git rebase main
