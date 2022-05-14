@@ -5,7 +5,6 @@ on:
   pull_request:
     branches:
     - main
-    - staging
 
 env:
   MODULE_DIR: terraform/mymodule
@@ -118,12 +117,6 @@ jobs:
 
   apply-staging:
     runs-on: ubuntu-latest
-    if: >
-      github.event.pull_request.base.ref == 'staging' ||
-      (
-        github.event_name == 'workflow_dispatch' &&
-        github.ref == 'refs/heads/staging'
-      )
     environment: staging
     steps:
     - uses: hashicorp/setup-terraform@v1
@@ -155,23 +148,17 @@ jobs:
 
   apply-prod:
     runs-on: ubuntu-latest
-    if: >
-      github.event.pull_request.base.ref == 'main' ||
-      (
-        github.event_name == 'workflow_dispatch' &&
-        github.ref == 'refs/heads/main'
-      )
     environment: prod
     steps:
     - uses: hashicorp/setup-terraform@v1
 
-    - name: Merge Pull Request
-      uses: juliangruber/merge-pull-request-action@e4d60b8afba3c7e3db40016e653071b14ac5313c
-      if: github.event_name == 'pull_request'
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        number: ${{ github.event.pull_request.number }}
-        method: rebase
+#     - name: Merge Pull Request
+#       uses: juliangruber/merge-pull-request-action@e4d60b8afba3c7e3db40016e653071b14ac5313c
+#       if: github.event_name == 'pull_request'
+#       with:
+#         github-token: ${{ secrets.GITHUB_TOKEN }}
+#         number: ${{ github.event.pull_request.number }}
+#         method: rebase
 
     - uses: actions/checkout@v2
       with:
